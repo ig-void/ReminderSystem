@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Reminder, ReminderPriority } from '../../../../core/models/reminder.models';
 import { ModalComponent } from '../../../../shared/components/ui/modal/modal.component';
+import { parseUtcDate } from '../../../../core/utils/date.utils';
 
 @Component({
   selector: 'app-reminder-form-modal',
@@ -26,6 +27,8 @@ export class ReminderFormModalComponent implements OnChanges {
     description: ['', [Validators.maxLength(1000)]],
     dueDate: ['', [Validators.required]],
     priority: [ReminderPriority.Medium, [Validators.required]],
+    remindBeforeMinutes: [15, [Validators.required, Validators.min(0), Validators.max(10080)]],
+    webhookUrl: [''],
     isPublic: [false],
     isCompleted: [false]
   });
@@ -37,27 +40,33 @@ export class ReminderFormModalComponent implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['isOpen'] && this.isOpen) {
       if (this.reminderToEdit) {
-        // Pre-fill existing data for edit
         const localDateTime = this.formatDateForInput(this.reminderToEdit.dueDate);
         this.form.patchValue({
           title: this.reminderToEdit.title,
           description: this.reminderToEdit.description || '',
           dueDate: localDateTime,
           priority: this.reminderToEdit.priority,
+          remindBeforeMinutes: this.reminderToEdit.remindBeforeMinutes ?? 15,
+          webhookUrl: this.reminderToEdit.webhookUrl || '',
           isPublic: this.reminderToEdit.isPublic,
           isCompleted: this.reminderToEdit.isCompleted
         });
       } else {
-        // Default values for new reminder (tomorrow at 10:00 AM)
+        const pad = (n: number) => (n < 10 ? '0' + n : n);
         const defaultDate = new Date();
         defaultDate.setDate(defaultDate.getDate() + 1);
-        defaultDate.setHours(10, 0, 0, 0);
+        const y = defaultDate.getFullYear();
+        const m = pad(defaultDate.getMonth() + 1);
+        const d = pad(defaultDate.getDate());
+        const defaultLocal = `${y}-${m}-${d}T10:00`;
 
         this.form.reset({
           title: '',
           description: '',
-          dueDate: this.formatDateForInput(defaultDate.toISOString()),
+          dueDate: defaultLocal,
           priority: ReminderPriority.Medium,
+          remindBeforeMinutes: 15,
+          webhookUrl: '',
           isPublic: false,
           isCompleted: false
         });
@@ -84,6 +93,8 @@ export class ReminderFormModalComponent implements OnChanges {
       description: formVal.description ? formVal.description.trim() : null,
       dueDate: isoDueDate,
       priority: Number(formVal.priority),
+      remindBeforeMinutes: Number(formVal.remindBeforeMinutes),
+      webhookUrl: formVal.webhookUrl ? formVal.webhookUrl.trim() : null,
       isPublic: !!formVal.isPublic,
       ...(this.isEditMode ? { isCompleted: !!formVal.isCompleted } : {})
     };
@@ -100,7 +111,7 @@ export class ReminderFormModalComponent implements OnChanges {
   }
 
   private formatDateForInput(isoDateString: string): string {
-    const date = new Date(isoDateString);
+    const date = parseUtcDate(isoDateString) ?? new Date(isoDateString);
     const pad = (n: number) => (n < 10 ? '0' + n : n);
     const year = date.getFullYear();
     const month = pad(date.getMonth() + 1);

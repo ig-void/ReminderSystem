@@ -18,6 +18,12 @@ public class CreateReminderDto
     public ReminderPriority Priority { get; set; } = ReminderPriority.Medium;
 
     public bool IsPublic { get; set; } = false;
+
+    [Range(0, 10080, ErrorMessage = "RemindBeforeMinutes must be between 0 (at due time) and 10080 (7 days)")]
+    public int RemindBeforeMinutes { get; set; } = 15;
+
+    [Url(ErrorMessage = "Invalid webhook URL format")]
+    public string? WebhookUrl { get; set; }
 }
 
 public class UpdateReminderDto
@@ -38,6 +44,12 @@ public class UpdateReminderDto
     public bool IsCompleted { get; set; }
 
     public bool IsPublic { get; set; }
+
+    [Range(0, 10080, ErrorMessage = "RemindBeforeMinutes must be between 0 (at due time) and 10080 (7 days)")]
+    public int RemindBeforeMinutes { get; set; } = 15;
+
+    [Url(ErrorMessage = "Invalid webhook URL format")]
+    public string? WebhookUrl { get; set; }
 }
 
 public class ReminderResponseDto
@@ -50,6 +62,10 @@ public class ReminderResponseDto
     public string PriorityName => Priority.ToString();
     public bool IsCompleted { get; set; }
     public bool IsPublic { get; set; }
+    public int RemindBeforeMinutes { get; set; }
+    public bool IsEmailSent { get; set; }
+    public DateTime? EmailSentAt { get; set; }
+    public string? WebhookUrl { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 

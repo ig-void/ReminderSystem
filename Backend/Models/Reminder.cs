@@ -30,6 +30,19 @@ public class Reminder
 
     public bool IsPublic { get; set; } = false;
 
+    // Notification configuration: Lead time before due date in minutes (e.g. 5, 15, 30, 60, etc.)
+    public int RemindBeforeMinutes { get; set; } = 15;
+
+    public bool IsEmailSent { get; set; } = false;
+
+    public DateTime? EmailSentAt { get; set; }
+
+    [MaxLength(100)]
+    public string? HangfireJobId { get; set; }
+
+    [MaxLength(500)]
+    public string? WebhookUrl { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? UpdatedAt { get; set; }

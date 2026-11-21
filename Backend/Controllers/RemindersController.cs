@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Backend.Data;
 using Backend.Models;
 using Backend.Models.DTOs;
+using Backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -16,15 +17,18 @@ public class RemindersController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IReminderNotificationService _notificationService;
     private readonly ILogger<RemindersController> _logger;
 
     public RemindersController(
         ApplicationDbContext context,
         UserManager<ApplicationUser> userManager,
+        IReminderNotificationService notificationService,
         ILogger<RemindersController> logger)
     {
         _context = context;
         _userManager = userManager;
+        _notificationService = notificationService;
         _logger = logger;
     }
 
@@ -52,7 +56,6 @@ public class RemindersController : ControllerBase
             .Include(r => r.User)
             .Where(r => r.UserId == currentUserId);
 
-        // Filter: Search term
         if (!string.IsNullOrWhiteSpace(search))
         {
             var searchLower = search.Trim().ToLower();
@@ -60,19 +63,16 @@ public class RemindersController : ControllerBase
                                      (r.Description != null && r.Description.ToLower().Contains(searchLower)));
         }
 
-        // Filter: Completion status
         if (isCompleted.HasValue)
         {
             query = query.Where(r => r.IsCompleted == isCompleted.Value);
         }
 
-        // Filter: Priority
         if (priority.HasValue)
         {
             query = query.Where(r => r.Priority == priority.Value);
         }
 
-        // Sorting
         query = (sortBy?.ToLower()) switch
         {
             "priority" => isDescending ? query.OrderByDescending(r => r.Priority) : query.OrderBy(r => r.Priority),
@@ -106,7 +106,6 @@ public class RemindersController : ControllerBase
             .Include(r => r.User)
             .Where(r => r.UserId != currentUserId && r.IsPublic == true);
 
-        // Filter: Search term
         if (!string.IsNullOrWhiteSpace(search))
         {
             var searchLower = search.Trim().ToLower();
@@ -114,13 +113,11 @@ public class RemindersController : ControllerBase
                                      (r.Description != null && r.Description.ToLower().Contains(searchLower)));
         }
 
-        // Filter: Completion status
         if (isCompleted.HasValue)
         {
             query = query.Where(r => r.IsCompleted == isCompleted.Value);
         }
 
-        // Filter: Priority
         if (priority.HasValue)
         {
             query = query.Where(r => r.Priority == priority.Value);
@@ -159,7 +156,6 @@ public class RemindersController : ControllerBase
             return NotFound(new { message = $"Reminder with ID {id} was not found." });
         }
 
-        // Allow view if owned by current user or marked as public
         if (reminder.UserId != currentUserId && !reminder.IsPublic)
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { message = "You do not have permission to view this reminder." });
@@ -169,7 +165,7 @@ public class RemindersController : ControllerBase
     }
 
     /// <summary>
-    /// Add a new reminder
+    /// Add a new reminder and schedule Hangfire email notification
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(ReminderResponseDto), StatusCodes.Status201Created)]
@@ -193,14 +189,24 @@ public class RemindersController : ControllerBase
             return Unauthorized();
         }
 
+        var dueDateUtc = createDto.DueDate.Kind switch
+        {
+            DateTimeKind.Utc => createDto.DueDate,
+            DateTimeKind.Local => createDto.DueDate.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(createDto.DueDate, DateTimeKind.Utc)
+        };
+
         var reminder = new Reminder
         {
             Title = createDto.Title.Trim(),
             Description = createDto.Description?.Trim(),
-            DueDate = createDto.DueDate,
+            DueDate = dueDateUtc,
             Priority = createDto.Priority,
             IsPublic = createDto.IsPublic,
+            RemindBeforeMinutes = createDto.RemindBeforeMinutes,
+            WebhookUrl = createDto.WebhookUrl?.Trim(),
             IsCompleted = false,
+            IsEmailSent = false,
             CreatedAt = DateTime.UtcNow,
             UserId = currentUserId,
             User = currentUser
@@ -209,14 +215,26 @@ public class RemindersController : ControllerBase
         _context.Reminders.Add(reminder);
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Reminder created with ID {Id} for user {UserId}", reminder.Id, currentUserId);
+        // Schedule Hangfire background notification job
+        var jobId = _notificationService.ScheduleReminderJob(
+            reminder.Id,
+            reminder.DueDate,
+            reminder.RemindBeforeMinutes);
+
+        if (!string.IsNullOrEmpty(jobId))
+        {
+            reminder.HangfireJobId = jobId;
+            await _context.SaveChangesAsync();
+        }
+
+        _logger.LogInformation("Reminder created with ID {Id} for user {UserId}. Hangfire Job: {JobId}", reminder.Id, currentUserId, jobId);
 
         var responseDto = MapToDto(reminder, currentUserId);
         return CreatedAtAction(nameof(GetById), new { id = reminder.Id }, responseDto);
     }
 
     /// <summary>
-    /// Edit / Update an existing reminder
+    /// Edit / Update an existing reminder and reschedule Hangfire notification
     /// </summary>
     [HttpPut("{id:int}")]
     [ProducesResponseType(typeof(ReminderResponseDto), StatusCodes.Status200OK)]
@@ -250,13 +268,42 @@ public class RemindersController : ControllerBase
             return StatusCode(StatusCodes.Status403Forbidden, new { message = "You can only edit your own reminders." });
         }
 
+        var updateDueUtc = updateDto.DueDate.Kind switch
+        {
+            DateTimeKind.Utc => updateDto.DueDate,
+            DateTimeKind.Local => updateDto.DueDate.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(updateDto.DueDate, DateTimeKind.Utc)
+        };
+        bool notificationConfigChanged = reminder.DueDate != updateDueUtc ||
+                                        reminder.RemindBeforeMinutes != updateDto.RemindBeforeMinutes;
+
         reminder.Title = updateDto.Title.Trim();
         reminder.Description = updateDto.Description?.Trim();
-        reminder.DueDate = updateDto.DueDate;
+        reminder.DueDate = updateDueUtc;
         reminder.Priority = updateDto.Priority;
         reminder.IsCompleted = updateDto.IsCompleted;
         reminder.IsPublic = updateDto.IsPublic;
+        reminder.RemindBeforeMinutes = updateDto.RemindBeforeMinutes;
+        reminder.WebhookUrl = updateDto.WebhookUrl?.Trim();
         reminder.UpdatedAt = DateTime.UtcNow;
+
+        if (reminder.IsCompleted)
+        {
+            // Cancel notification if completed
+            _notificationService.CancelReminderJob(reminder.HangfireJobId);
+            reminder.HangfireJobId = null;
+        }
+        else if (notificationConfigChanged && !reminder.IsEmailSent)
+        {
+            // Reschedule notification
+            _notificationService.CancelReminderJob(reminder.HangfireJobId);
+            var newJobId = _notificationService.ScheduleReminderJob(
+                reminder.Id,
+                reminder.DueDate,
+                reminder.RemindBeforeMinutes);
+
+            reminder.HangfireJobId = newJobId;
+        }
 
         await _context.SaveChangesAsync();
 
@@ -266,7 +313,7 @@ public class RemindersController : ControllerBase
     }
 
     /// <summary>
-    /// Delete a reminder
+    /// Delete a reminder and cancel any scheduled Hangfire notification
     /// </summary>
     [HttpDelete("{id:int}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -290,6 +337,8 @@ public class RemindersController : ControllerBase
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { message = "You can only delete your own reminders." });
         }
+
+        _notificationService.CancelReminderJob(reminder.HangfireJobId);
 
         _context.Reminders.Remove(reminder);
         await _context.SaveChangesAsync();
@@ -331,6 +380,21 @@ public class RemindersController : ControllerBase
         reminder.IsCompleted = !reminder.IsCompleted;
         reminder.UpdatedAt = DateTime.UtcNow;
 
+        if (reminder.IsCompleted)
+        {
+            _notificationService.CancelReminderJob(reminder.HangfireJobId);
+            reminder.HangfireJobId = null;
+        }
+        else if (!reminder.IsEmailSent)
+        {
+            var jobId = _notificationService.ScheduleReminderJob(
+                reminder.Id,
+                reminder.DueDate,
+                reminder.RemindBeforeMinutes);
+
+            reminder.HangfireJobId = jobId;
+        }
+
         await _context.SaveChangesAsync();
 
         return Ok(MapToDto(reminder, currentUserId));
@@ -346,16 +410,31 @@ public class RemindersController : ControllerBase
             Id = reminder.Id,
             Title = reminder.Title,
             Description = reminder.Description,
-            DueDate = reminder.DueDate,
+            DueDate = EnsureUtc(reminder.DueDate),
             Priority = reminder.Priority,
             IsCompleted = reminder.IsCompleted,
             IsPublic = reminder.IsPublic,
-            CreatedAt = reminder.CreatedAt,
-            UpdatedAt = reminder.UpdatedAt,
+            RemindBeforeMinutes = reminder.RemindBeforeMinutes,
+            IsEmailSent = reminder.IsEmailSent,
+            EmailSentAt = EnsureUtc(reminder.EmailSentAt),
+            WebhookUrl = reminder.WebhookUrl,
+            CreatedAt = EnsureUtc(reminder.CreatedAt),
+            UpdatedAt = EnsureUtc(reminder.UpdatedAt),
             UserId = reminder.UserId,
             UserEmail = reminder.User?.Email,
             UserFullName = string.IsNullOrEmpty(fullName) ? reminder.User?.UserName : fullName,
             IsOwner = reminder.UserId == currentUserId
         };
+    }
+
+    private static DateTime EnsureUtc(DateTime dt)
+    {
+        return dt.Kind == DateTimeKind.Utc ? dt : (dt.Kind == DateTimeKind.Local ? dt.ToUniversalTime() : DateTime.SpecifyKind(dt, DateTimeKind.Utc));
+    }
+
+    private static DateTime? EnsureUtc(DateTime? dt)
+    {
+        if (!dt.HasValue) return null;
+        return dt.Value.Kind == DateTimeKind.Utc ? dt.Value : (dt.Value.Kind == DateTimeKind.Local ? dt.Value.ToUniversalTime() : DateTime.SpecifyKind(dt.Value, DateTimeKind.Utc));
     }
 }

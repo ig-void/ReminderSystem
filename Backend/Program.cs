@@ -1,7 +1,10 @@
 using System.Text;
+using Backend.Common;
 using Backend.Data;
 using Backend.Models;
 using Backend.Services;
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -10,9 +13,9 @@ using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Database Context (SQL Server)
+// 1. Database Context (SQL Server) - Connection string loaded from appsettings.json
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? "Server=localhost;Database=ReminderAppDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' was not found in appsettings.json.");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
@@ -30,7 +33,24 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-// 3. JWT Authentication
+// 3. Hangfire (Background Processing with SQL Server Storage)
+builder.Services.AddHangfire(configuration => configuration
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+    {
+        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+        QueuePollInterval = TimeSpan.FromSeconds(15),
+        UseRecommendedIsolationLevel = true,
+        DisableGlobalLocks = true
+    }));
+
+// Note: Background job processing is handled independently by the HangfireWorker project.
+// The Web API only enqueues/schedules jobs into SQL Server and hosts the /hangfire dashboard.
+
+// 4. JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] 
     ?? "ReminderApp_Super_Secret_Jwt_Security_Key_2026_Minimum_32_Characters!";
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ReminderApplicationBackend";
@@ -59,13 +79,21 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// 4. Custom Application Services
+// 5. Custom Application Services & HttpClient
+builder.Services.AddHttpClient();
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IReminderNotificationService, ReminderNotificationService>();
 
-// 5. Controllers
-builder.Services.AddControllers();
+// 6. Controllers with UTC Date Serialization
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
+        options.JsonSerializerOptions.Converters.Add(new NullableUtcDateTimeJsonConverter());
+    });
 
-// 6. CORS Configuration
+// 7. CORS Configuration
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
     ?? new[] { "http://localhost:4200", "https://localhost:4200" };
 
@@ -87,7 +115,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// 7. Swagger / OpenAPI Configuration with JWT Support
+// 8. Swagger / OpenAPI Configuration with JWT Support
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -95,10 +123,9 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Reminder Application API",
         Version = "v1",
-        Description = "API documentation with Identity & JWT Authentication (C# 10 / .NET 10)"
+        Description = "API documentation with Hangfire, Webhooks & JWT Authentication (C# 10 / .NET 10)"
     });
 
-    // Configure Swagger to support JWT Bearer authorization
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -132,6 +159,19 @@ app.UseHttpsRedirection();
 
 // Enable CORS
 app.UseCors("AllowFrontend");
+
+// Hangfire Dashboard (available at /hangfire)
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    DashboardTitle = "Reminder Application - Background Jobs",
+    Authorization = new[] { new HangfireAuthorizationFilter() }
+});
+
+// Setup recurring Hangfire job to check for due reminders every minute
+RecurringJob.AddOrUpdate<IReminderNotificationService>(
+    "check-due-reminders-minutely",
+    service => service.CheckAndSendDueRemindersAsync(),
+    Cron.Minutely);
 
 // Authentication & Authorization middleware
 app.UseAuthentication();

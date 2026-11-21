@@ -14,6 +14,10 @@ export interface Reminder {
   priorityName: string;
   isCompleted: boolean;
   isPublic: boolean;
+  remindBeforeMinutes: number;
+  isEmailSent: boolean;
+  emailSentAt?: string;
+  webhookUrl?: string;
   createdAt: string;
   updatedAt?: string;
   userId: string;
@@ -28,6 +32,8 @@ export interface CreateReminderRequest {
   dueDate: string;
   priority: ReminderPriority;
   isPublic: boolean;
+  remindBeforeMinutes: number;
+  webhookUrl?: string;
 }
 
 export interface UpdateReminderRequest {
@@ -37,6 +43,8 @@ export interface UpdateReminderRequest {
   priority: ReminderPriority;
   isCompleted: boolean;
   isPublic: boolean;
+  remindBeforeMinutes: number;
+  webhookUrl?: string;
 }
 
 export interface ReminderFilter {
