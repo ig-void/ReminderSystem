@@ -1,0 +1,30 @@
+<span
+  class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium border"
+  [ngClass]="{
+    'bg-slate-50 text-slate-700 border-slate-200': priority === PriorityEnum.Low,
+    'bg-sky-50 text-sky-700 border-sky-200': priority === PriorityEnum.Medium,
+    'bg-amber-50 text-amber-700 border-amber-200': priority === PriorityEnum.High,
+    'bg-rose-50 text-rose-700 border-rose-200': priority === PriorityEnum.Urgent
+  }"
+>
+  <span
+    class="h-1.5 w-1.5 rounded-full"
+    [ngClass]="{
+      'bg-slate-400': priority === PriorityEnum.Low,
+      'bg-sky-500': priority === PriorityEnum.Medium,
+      'bg-amber-500': priority === PriorityEnum.High,
+      'bg-rose-500': priority === PriorityEnum.Urgent
+    }"
+  ></span>
+  <span>
+    {{
+      priority === PriorityEnum.Low
+        ? 'Low'
+        : priority === PriorityEnum.Medium
+        ? 'Medium'
+        : priority === PriorityEnum.High
+        ? 'High'
+        : 'Urgent'
+    }}
+  </span>
+</span>

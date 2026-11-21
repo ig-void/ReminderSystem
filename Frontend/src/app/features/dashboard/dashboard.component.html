@@ -1,0 +1,176 @@
+<div class="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
+  <!-- Reusable Navigation Bar Component -->
+  <app-navbar [user]="user()" (logout)="onLogout()"></app-navbar>
+
+  <!-- Main Workspace Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <!-- Status Toast / Alert -->
+    <div *ngIf="statusMessage()" class="transition-all animate-fadeIn">
+      <app-ui-alert [type]="statusMessage()!.type" [message]="statusMessage()!.text"></app-ui-alert>
+    </div>
+
+    <!-- Overview Metrics Row -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <!-- Total -->
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total</span>
+          <p class="text-2xl font-bold text-slate-900 mt-0.5">{{ totalMyReminders }}</p>
+        </div>
+        <div class="h-9 w-9 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- Pending -->
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Pending</span>
+          <p class="text-2xl font-bold text-amber-600 mt-0.5">{{ pendingMyReminders }}</p>
+        </div>
+        <div class="h-9 w-9 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- Completed -->
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Completed</span>
+          <p class="text-2xl font-bold text-emerald-600 mt-0.5">{{ completedMyReminders }}</p>
+        </div>
+        <div class="h-9 w-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- Shared -->
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex items-center justify-between">
+        <div>
+          <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Public</span>
+          <p class="text-2xl font-bold text-sky-600 mt-0.5">{{ publicMyReminders }}</p>
+        </div>
+        <div class="h-9 w-9 rounded-lg bg-sky-50 flex items-center justify-center text-sky-600">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Workspace Navigation Tabs -->
+    <div class="border-b border-slate-200">
+      <nav class="flex space-x-6" aria-label="Tabs">
+        <!-- My Reminders Tab -->
+        <button type="button" (click)="setTab('my')"
+          class="py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors cursor-pointer"
+          [ngClass]="activeTab() === 'my' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+          <span>My Reminders</span>
+          <span class="ml-1 px-2 py-0.5 rounded-full text-xs"
+            [ngClass]="activeTab() === 'my' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'">
+            {{ totalMyReminders }}
+          </span>
+        </button>
+
+        <!-- Shared / Other Reminders Tab -->
+        <button type="button" (click)="setTab('others')"
+          class="py-3 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors cursor-pointer"
+          [ngClass]="activeTab() === 'others' ? 'border-slate-900 text-slate-900 font-semibold' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+          </svg>
+          <span>Shared by Others</span>
+          <span class="ml-1 px-2 py-0.5 rounded-full text-xs"
+            [ngClass]="activeTab() === 'others' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'">
+            {{ othersReminders().length }}
+          </span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Filter Bar Component -->
+    <app-reminder-filter-bar [isOthersView]="activeTab() === 'others'" [totalCount]="displayedReminders.length"
+      (searchChange)="onSearchChange($event)" (statusFilterChange)="onStatusFilterChange($event)"
+      (priorityFilterChange)="onPriorityFilterChange($event)" (sortChange)="onSortChange($event)"
+      (addReminderClick)="openCreateModal()"></app-reminder-filter-bar>
+
+    <!-- Content: Reminders Grid / Loading / Empty State -->
+    <div>
+      <!-- Loading State -->
+      <div *ngIf="isLoading()" class="py-16 text-center text-slate-500">
+        <svg class="animate-spin mx-auto h-8 w-8 text-slate-800" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+          </path>
+        </svg>
+        <p class="mt-3 text-sm">Loading reminders...</p>
+      </div>
+
+      <!-- Empty State -->
+      <div *ngIf="!isLoading() && displayedReminders.length === 0"
+        class="bg-white rounded-xl border border-slate-200 py-16 px-6 text-center shadow-xs">
+        <div class="mx-auto h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        </div>
+
+        <h3 class="mt-4 text-base font-semibold text-slate-900">
+          {{ activeTab() === 'my' ? 'No reminders found' : 'No shared reminders available' }}
+        </h3>
+        <p class="mt-1 text-sm text-slate-500 max-w-sm mx-auto">
+          {{
+          activeTab() === 'my'
+          ? 'Stay organized and on schedule by creating your first reminder task.'
+          : 'When other users make their reminders public, they will appear here.'
+          }}
+        </p>
+
+        <div *ngIf="activeTab() === 'my'" class="mt-5">
+          <button type="button" (click)="openCreateModal()"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shadow-xs">
+            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Create Your First Reminder
+          </button>
+        </div>
+      </div>
+
+      <!-- Reminders Grid -->
+      <div *ngIf="!isLoading() && displayedReminders.length > 0"
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <app-reminder-card *ngFor="let reminder of displayedReminders" [reminder]="reminder"
+          [isOthersView]="activeTab() === 'others'" (toggleComplete)="onToggleComplete($event)"
+          (edit)="openEditModal($event)" (delete)="openDeleteModal($event)"></app-reminder-card>
+      </div>
+    </div>
+  </main>
+
+  <!-- Create / Edit Reminder Modal -->
+  <app-reminder-form-modal [isOpen]="isFormModalOpen()" [reminderToEdit]="reminderToEdit()"
+    [isSaving]="isSavingReminder()" (save)="onSaveReminder($event)"
+    (cancel)="closeFormModal()"></app-reminder-form-modal>
+
+  <!-- Delete Confirmation Modal -->
+  <app-delete-confirm-modal [isOpen]="isDeleteModalOpen()" [reminderTitle]="reminderToDelete()?.title || ''"
+    [isDeleting]="isDeletingReminder()" (confirm)="onConfirmDelete()"
+    (cancel)="closeDeleteModal()"></app-delete-confirm-modal>
+</div>

@@ -1,0 +1,97 @@
+<div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs space-y-3">
+  <!-- Top Row: Search & Add button -->
+  <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+    <!-- Search Input -->
+    <div class="relative flex-1 max-w-md">
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+      </div>
+      <input
+        type="text"
+        [(ngModel)]="searchTerm"
+        (ngModelChange)="onSearchChange()"
+        placeholder="Search reminders by title or description..."
+        class="block w-full rounded-lg border border-slate-300 pl-9 pr-3.5 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-slate-900 transition-colors"
+      />
+    </div>
+
+    <!-- Add Reminder Button (Only in My Reminders view) -->
+    <button
+      *ngIf="!isOthersView"
+      type="button"
+      (click)="onAddClick()"
+      class="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition-colors shadow-xs focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1"
+    >
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+      </svg>
+      <span>New Reminder</span>
+    </button>
+  </div>
+
+  <!-- Bottom Row: Status Filter Pills & Sort/Priority Dropdowns -->
+  <div class="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-slate-100 text-xs">
+    <!-- Status Segmented Controls -->
+    <div class="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+      <button
+        type="button"
+        (click)="onStatusChange('all')"
+        class="px-3 py-1 rounded-md text-xs font-medium transition-colors"
+        [ngClass]="selectedStatus === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+      >
+        All
+      </button>
+      <button
+        type="button"
+        (click)="onStatusChange('pending')"
+        class="px-3 py-1 rounded-md text-xs font-medium transition-colors"
+        [ngClass]="selectedStatus === 'pending' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+      >
+        Pending
+      </button>
+      <button
+        type="button"
+        (click)="onStatusChange('completed')"
+        class="px-3 py-1 rounded-md text-xs font-medium transition-colors"
+        [ngClass]="selectedStatus === 'completed' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'"
+      >
+        Completed
+      </button>
+    </div>
+
+    <!-- Dropdowns: Priority & Sort -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <!-- Priority Filter -->
+      <div class="flex items-center gap-1.5">
+        <span class="text-slate-500 font-medium">Priority:</span>
+        <select
+          [(ngModel)]="selectedPriority"
+          (ngModelChange)="onPriorityChange()"
+          class="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-slate-900"
+        >
+          <option value="">All Priorities</option>
+          <option value="1">Low</option>
+          <option value="2">Medium</option>
+          <option value="3">High</option>
+          <option value="4">Urgent</option>
+        </select>
+      </div>
+
+      <!-- Sort Filter (Only in My Reminders view) -->
+      <div *ngIf="!isOthersView" class="flex items-center gap-1.5">
+        <span class="text-slate-500 font-medium">Sort:</span>
+        <select
+          [(ngModel)]="selectedSort"
+          (ngModelChange)="onSortChange()"
+          class="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-slate-900"
+        >
+          <option value="duedate">Due Date</option>
+          <option value="priority">Priority</option>
+          <option value="createdat">Created Date</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
